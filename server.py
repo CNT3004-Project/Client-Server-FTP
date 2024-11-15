@@ -1,47 +1,57 @@
-
 import socket
+import os
 
 IP = socket.gethostbyname(socket.gethostname())
 PORT = 4455
 ADDR = (IP, PORT)
 SIZE = 1024
 FORMAT = "utf-8"
+FOLDER = "server_data"  # Folder to save files
+
 
 def main():
+    """ Start a TCP socket. """
     print("[STARTING] Server is starting.")
-    """ Staring a TCP socket. """
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     """ Bind the IP and PORT to the server. """
     server.bind(ADDR)
 
-    """ Server is listening, i.e., server is now waiting for the client to connected. """
+    """ Create folder if it doesn't exist. """
+    if not os.path.exists(FOLDER):
+        os.makedirs(FOLDER)
+
+    """ Server is listening. """
     server.listen()
     print("[LISTENING] Server is listening.")
 
     while True:
-        """ Server has accepted the connection from the client. """
+        """ Accept a connection from the client. """
         conn, addr = server.accept()
         print(f"[NEW CONNECTION] {addr} connected.")
 
-        """ Receiving the filename from the client. """
-        filename = conn.recv(SIZE).decode(FORMAT)
-        print(f"[RECV] Receiving the filename.")
-        file = open(filename, "w")
-        conn.send("Filename received.".encode(FORMAT))
+        while True:
+            """ Receive the filename. """
+            filename = conn.recv(SIZE).decode(FORMAT)
 
-        """ Receiving the file data from the client. """
-        data = conn.recv(SIZE).decode(FORMAT)
-        print(f"[RECV] Receiving the file data.")
-        file.write(data)
-        conn.send("File data received".encode(FORMAT))
+            if filename == "DONE":
+                print("[DONE] All files received.")
+                break
 
-        """ Closing the file. """
-        file.close()
+            print(f"[RECV] Receiving the file: {filename}")
+            file_path = os.path.join(FOLDER, filename)
 
-        """ Closing the connection from the client. """
+            """ Receive the file data. """
+            with open(file_path, "w") as file:
+                data = conn.recv(SIZE).decode(FORMAT)
+                file.write(data)
+
+            conn.send("File received.".encode(FORMAT))
+
+        """ Close the connection with the client. """
         conn.close()
         print(f"[DISCONNECTED] {addr} disconnected.")
+
 
 if __name__ == "__main__":
     main()
