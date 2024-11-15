@@ -4,45 +4,28 @@ import os
 IP = socket.gethostbyname(socket.gethostname())
 PORT = 4455
 ADDR = (IP, PORT)
-SIZE = 1024  # Make sure this matches the client-side SIZE
+SIZE = 1024
 FORMAT = "utf-8"
-FOLDER = "server_data"  # Folder to save files
+FOLDER = "server_data"  # Folder to store files
 
-def main():
-    """ Start a TCP socket. """
-    print("[STARTING] Server is starting.")
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    """ Bind the IP and PORT to the server. """
-    server.bind(ADDR)
-
-    """ Create folder if it doesn't exist. """
-    if not os.path.exists(FOLDER):
-        os.makedirs(FOLDER)
-
-    """ Server is listening. """
-    server.listen()
-    print("[LISTENING] Server is listening.")
+def handle_client(conn, addr):
+    print(f"[NEW CONNECTION] {addr} connected.")
 
     while True:
-        """ Accept a connection from the client. """
-        conn, addr = server.accept()
-        print(f"[NEW CONNECTION] {addr} connected.")
+        # Receive client request
+        request = conn.recv(SIZE).decode(FORMAT)
+        if not request:
+            break
 
-        while True:
-            """ Receive the metadata (filename and size). """
-            metadata = conn.recv(SIZE).decode(FORMAT)
-            if metadata == "DONE":
-                print("[DONE] All files received.")
-                break
+        print(f"[REQUEST] {addr}: {request}")
+        command, *args = request.split(":")
 
-            filename, file_size = metadata.split(":")
+        if command == "UPLOAD":
+            filename, file_size = args
             file_size = int(file_size)
-            print(f"[RECV] Receiving the file: {filename} ({file_size} bytes)")
-
             file_path = os.path.join(FOLDER, filename)
 
-            """ Receive the file data in chunks. """
             with open(file_path, "wb") as file:
                 bytes_received = 0
                 while bytes_received < file_size:
@@ -51,18 +34,48 @@ def main():
                         break
                     file.write(chunk)
                     bytes_received += len(chunk)
-                    print(f"[DEBUG] Received {bytes_received}/{file_size} bytes")
 
-                    # Calculate and display progress
-                    progress = (bytes_received / file_size) * 100
-                    print(f"[PROGRESS] {filename}: {progress:.2f}% received", end="\r")
+            conn.send(f"[SUCCESS] {filename} uploaded.".encode(FORMAT))
 
-            print(f"\n[COMPLETE] {filename} received successfully.")
-            conn.send(f"{filename} received.".encode(FORMAT))
+        elif command == "DOWNLOAD":
+            filename = args[0]
+            file_path = os.path.join(FOLDER, filename)
 
-        """ Close the connection with the client. """
-        conn.close()
-        print(f"[DISCONNECTED] {addr} disconnected.")
+            if os.path.exists(file_path):
+                file_size = os.path.getsize(file_path)
+                conn.send(f"{file_size}".encode(FORMAT))
+                with open(file_path, "rb") as file:
+                    while chunk := file.read(SIZE):
+                        conn.send(chunk)
+            else:
+                conn.send("[ERROR] File not found.".encode(FORMAT))
+
+        elif command == "LIST":
+            files = os.listdir(FOLDER)
+            conn.send("\n".join(files).encode(FORMAT))
+
+        elif command == "QUIT":
+            break
+
+    conn.close()
+    print(f"[DISCONNECTED] {addr} disconnected.")
+
+
+def main():
+    print("[STARTING] Server is starting.")
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(ADDR)
+
+    if not os.path.exists(FOLDER):
+        os.makedirs(FOLDER)
+
+    server.listen()
+    print("[LISTENING] Server is listening.")
+
+    while True:
+        conn, addr = server.accept()
+        handle_client(conn, addr)
+
 
 if __name__ == "__main__":
     main()
