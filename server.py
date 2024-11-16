@@ -8,10 +8,10 @@ SIZE = 1024
 FORMAT = "utf-8"
 FOLDER = "server_data"  # Folder to store files
 
-
+#manages communication with the connected client
 def handle_client(conn, addr):
     print(f"[NEW CONNECTION] {addr} connected.")
-
+    #infinite loop to handle client requests until client disconnects
     while True:
         # Receive client request
         request = conn.recv(SIZE).decode(FORMAT)
@@ -20,7 +20,7 @@ def handle_client(conn, addr):
 
         print(f"[REQUEST] {addr}: {request}")
         command, *args = request.split(":")
-
+        #reads incoming file and then writes the indcoming chunks of data to a file in server_data
         if command == "UPLOAD":
             filename, file_size = args
             file_size = int(file_size)
@@ -36,7 +36,7 @@ def handle_client(conn, addr):
                     bytes_received += len(chunk)
 
             conn.send(f"[SUCCESS] {filename} uploaded.".encode(FORMAT))
-
+        #sends requested file to client
         elif command == "DOWNLOAD":
             filename = args[0]
             file_path = os.path.join(FOLDER, filename)
@@ -49,11 +49,11 @@ def handle_client(conn, addr):
                         conn.send(chunk)
             else:
                 conn.send("[ERROR] File not found.".encode(FORMAT))
-
+        #lists all files in server_data
         elif command == "LIST":
             files = os.listdir(FOLDER)
             conn.send("\n".join(files).encode(FORMAT))
-
+        #breaks the loop
         elif command == "QUIT":
             break
 
@@ -65,15 +65,15 @@ def main():
     print("[STARTING] Server is starting.")
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(ADDR)
-
+    #makes server_data if it doesnt exist
     if not os.path.exists(FOLDER):
         os.makedirs(FOLDER)
 
-    server.listen()
+    server.listen() #listens for client connections
     print("[LISTENING] Server is listening.")
 
     while True:
-        conn, addr = server.accept()
+        conn, addr = server.accept() #accepts connections
         handle_client(conn, addr)
 
 
