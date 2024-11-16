@@ -20,22 +20,39 @@ def handle_client(conn, addr):
 
         print(f"[REQUEST] {addr}: {request}")
         command, *args = request.split(":")
-        #reads incoming file and then writes the indcoming chunks of data to a file in server_data
+
+        #Handles client upload
         if command == "UPLOAD":
             filename, file_size = args
             file_size = int(file_size)
+            file_ext = os.path.splitext(filename)[1].lower()
             file_path = os.path.join(FOLDER, filename)
 
-            with open(file_path, "wb") as file:
-                bytes_received = 0
-                while bytes_received < file_size:
-                    chunk = conn.recv(SIZE)
-                    if not chunk:
-                        break
-                    file.write(chunk)
-                    bytes_received += len(chunk)
+            #check file size constrants
+            if file_ext == ".txt" and file_size > 25*1024*1024:
+                conn.send("[ERROR] Text files must be at most 25MB, please split the text files up".encode(FORMAT))
+            elif file_ext in [".mp3", ".wav"] and file_size > 1*1024*1024*1024:
+                conn.send("[ERROR] Audio files must be at most 1GB, please split the audio files up".encode(FORMAT))
+            elif file_ext in [".mp4", ".mkv", ".avi"] and file_size > 2*1024*1024*1024:
+                conn.send("[ERROR] Video files must be at most 2GB, please split the video files up".encode(FORMAT))
+            else:
+                with open(file_path, "wb") as file:
+                    bytes_received = 0
+                    while bytes_received < file_size:
+                        chunk = conn.recv(SIZE)
+                        if not chunk:
+                            break
+                        file.write(chunk)
+                        bytes_received += len(chunk)
 
-            conn.send(f"[SUCCESS] {filename} uploaded.".encode(FORMAT))
+                print(f"[INFO] Received {bytes_received}/{file_size} bytes.")
+
+                if bytes_received == file_size:
+                    print(f"[INFO] File {filename} uploaded successfully.")
+                    conn.send(f"[SUCCESS] {filename} uploaded.".encode(FORMAT))  # Confirm successful upload
+                else:
+                    print("[ERROR] File upload incomplete.")
+                    conn.send("[ERROR] File upload failed.".encode(FORMAT))
         #sends requested file to client
         elif command == "DOWNLOAD":
             filename = args[0]

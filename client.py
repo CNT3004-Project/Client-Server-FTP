@@ -12,6 +12,19 @@ def upload_file(client, filename):
     file_path = os.path.join(FOLDER, filename) #constructs filepath
     if os.path.exists(file_path):
         file_size = os.path.getsize(file_path)
+        file_ext = os.path.splitext(filename)[1].lower()
+        #warn user about file constraints
+        if file_ext == ".txt" and file_size > 25 * 1024 * 1024:
+            print("[ERROR] Text files must be at least 25 MB.")
+            return
+        elif file_ext in [".mp3", ".wav"] and file_size > 1 * 1024 * 1024 * 1024:
+            print("[ERROR] Audio files must be at least 1 GB.")
+            return
+        elif file_ext in [".mp4", ".mkv", ".avi"] and file_size > 2 * 1024 * 1024 * 1024:
+            print("[ERROR] Video files must be at least 2 GB.")
+            return
+
+        #continue file upload
         client.send(f"UPLOAD:{filename}:{file_size}".encode(FORMAT)) #sends upload request with file size and name
         with open(file_path, "rb") as file:
             while chunk := file.read(SIZE): #sends file in chunks
