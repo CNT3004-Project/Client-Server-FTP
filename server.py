@@ -74,6 +74,17 @@ def handle_client(conn, addr):
         elif command == "LIST":
             files = os.listdir(FOLDER)
             conn.send("\n".join(files).encode(FORMAT))
+        #Deletes a file from server_data
+        elif command == "DELETE":
+            filename = args[0]
+            file_path = os.path.join(FOLDER, filename)
+
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"[INFO] {filename} was deleted from server.")
+                conn.send(f"[SUCCESS] {filename} deleted.".encode(FORMAT))
+            else:
+                conn.send("[ERROR] file not found.".encode(FORMAT))
         #breaks the loop
         elif command == "QUIT":
             break
@@ -95,7 +106,7 @@ def main():
 
     while True:
         conn, addr = server.accept() #accepts connections
-        client_thread = threading.Thread(target=handle_client, args=(conn,addr))
+        client_thread = threading.Thread(target=handle_client, args=(conn,addr)) #creates a thread to handle client
         client_thread.start()
 
 

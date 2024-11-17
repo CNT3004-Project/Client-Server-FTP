@@ -64,12 +64,17 @@ def list_files(client):
     print("[FILES ON SERVER]:")
     print(files)
 
+def delete_file(client, filename):
+    client.send(f"DELETE:{filename}".encode(FORMAT))#send delete request
+    response = client.recv(SIZE).decode(FORMAT)
+    print(response)
+
 def main():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #creates a socket
     client.connect(ADDR)
 
     while True:
-        command = input("Enter command (UPLOAD, DOWNLOAD, LIST, QUIT): ").strip().upper()
+        command = input("Enter command (UPLOAD, DOWNLOAD, DELETE, LIST, QUIT): ").strip().upper()
         if command == "UPLOAD":
             filename = input("Enter filename to upload: ").strip()
             upload_file(client, filename)
@@ -78,6 +83,9 @@ def main():
             download_file(client, filename)
         elif command == "LIST":
             list_files(client)
+        elif command == "DELETE":
+            filename = input("Enter filename to delete: ").strip()
+            delete_file(client, filename)
         elif command == "QUIT": #terminates connection
             client.send("QUIT".encode(FORMAT))
             break
