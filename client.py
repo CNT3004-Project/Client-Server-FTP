@@ -69,12 +69,22 @@ def delete_file(client, filename):
     response = client.recv(SIZE).decode(FORMAT)
     print(response)
 
+def subfolder(client):
+    action = input("Enter command (CREATE OR DELETE): ").strip().upper()
+    if action not in["CREATE", "DELETE"]:
+        print("[ERROR] Invalid Action, Either CREATE or DELETE")
+        return
+    subfolder_name = input("Enter subfolder name: ").strip()
+    client.send(f"SUBFOLDER:{action}:{subfolder_name}".encode(FORMAT))  # send subfolder creation request
+    response = client.recv(SIZE).decode(FORMAT)
+    print(response)
+
 def main():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #creates a socket
     client.connect(ADDR)
 
     while True:
-        command = input("Enter command (UPLOAD, DOWNLOAD, DELETE, LIST, QUIT): ").strip().upper()
+        command = input("Enter command (UPLOAD, DOWNLOAD, DELETE, SUBFOLDER, LIST, QUIT): ").strip().upper()
         if command == "UPLOAD":
             filename = input("Enter filename to upload: ").strip()
             upload_file(client, filename)
@@ -86,6 +96,8 @@ def main():
         elif command == "DELETE":
             filename = input("Enter filename to delete: ").strip()
             delete_file(client, filename)
+        elif command == "SUBFOLDER":
+            subfolder(client)
         elif command == "QUIT": #terminates connection
             client.send("QUIT".encode(FORMAT))
             break

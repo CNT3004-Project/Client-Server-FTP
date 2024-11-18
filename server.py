@@ -72,7 +72,14 @@ def handle_client(conn, addr):
                 conn.send("[ERROR] File not found.".encode(FORMAT))
         #lists all files in server_data
         elif command == "LIST":
-            files = os.listdir(FOLDER)
+            response = []
+            for root, dirs, files in os.walk(FOLDER):
+                #add subfolder to response
+                for subfolder in dirs:
+                    response.append(f"[DIR] {os.path.relpath(os.path.join(root, subfolder), FOLDER)}")
+                # Add files to the response
+                for file in files:
+                    response.append(f"[FILE] {os.path.relpath(os.path.join(root, file), FOLDER)}")
             conn.send("\n".join(files).encode(FORMAT))
         #Deletes a file from server_data
         elif command == "DELETE":
@@ -85,6 +92,29 @@ def handle_client(conn, addr):
                 conn.send(f"[SUCCESS] {filename} deleted.".encode(FORMAT))
             else:
                 conn.send("[ERROR] file not found.".encode(FORMAT))
+        #creates a subfolder in server_data
+        elif command == "SUBFOLDER":
+            action, subfolder_name = args
+            subfolder_path = os.path.join(FOLDER, subfolder_name)
+
+            if action =="CREATE":
+                if not os.path.exists(subfolder_path):
+                    os.makedirs(subfolder_path)#creates subfolder
+                    conn.send(f"[SUCCESS] Subfolder '{subfolder_name}' created.".encode(FORMAT))
+                else:
+                    conn.send(f"[ERROR] Subfolder '{subfolder_name}' already exists".encode(FORMAT))
+            if action == "DELETE":
+                if os.path.exists(subfolder_path) and os.path.isdir(subfolder_path):
+                    try:
+                        os.rmdir(subfolder_path)
+                        conn.send(f"[SUCCESS] Subfolder '{subfolder_name} deleted'".encode(FORMAT))
+                    except OSError:
+                        conn.send(f"[ERROR] '{subfolder_name}' is not empty".encode(FORMAT))
+                else:
+                    conn.send(f"[ERROR] Subfolder '{subfolder_name} does not exist'".encode(FORMAT))
+            else:
+                conn.send("[ERROR] invalid subfolder action".encode(FORMAT))
+
         #breaks the loop
         elif command == "QUIT":
             break
