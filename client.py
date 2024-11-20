@@ -7,7 +7,8 @@ ADDR = (IP, PORT)
 FORMAT = "utf-8"
 SIZE = 1024
 FOLDER = "data"  # Folder for client files
-#uploads a file
+
+#Uploads a file
 def upload_file(client, filename):
     file_path = os.path.join(FOLDER, filename) #constructs filepath
     if os.path.exists(file_path):
@@ -32,7 +33,8 @@ def upload_file(client, filename):
         print(client.recv(SIZE).decode(FORMAT))
     else:
         print("[ERROR] File not found.")
-#downloads a file
+
+#Downloads a file
 def download_file(client, filename):
     client.send(f"DOWNLOAD:{filename}".encode(FORMAT)) #sends download request with file name
     response = client.recv(SIZE).decode(FORMAT)
@@ -57,6 +59,7 @@ def download_file(client, filename):
             print(f"[SUCCESS] {filename} downloaded.")
     else:
         print(response)
+
 #lists files in server
 def list_files(client):
     client.send("LIST".encode(FORMAT)) #sends list command to server
@@ -69,6 +72,7 @@ def delete_file(client, filename):
     response = client.recv(SIZE).decode(FORMAT)
     print(response)
 
+#Creates/Deletes a subfolder on the server.
 def subfolder(client):
     action = input("Enter command (CREATE OR DELETE): ").strip().upper()
     if action not in["CREATE", "DELETE"]:
@@ -82,6 +86,17 @@ def subfolder(client):
 def main():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #creates a socket
     client.connect(ADDR)
+
+    # Passcode validation
+    print(client.recv(SIZE).decode(FORMAT))  # Receive passcode prompt
+    passcode = input("Enter the passcode: ").strip()
+    client.send(passcode.encode(FORMAT))
+    response = client.recv(SIZE).decode(FORMAT)
+    if "[ERROR]" in response:
+        print(response)
+        client.close()
+        return
+    print(response)  # Passcode validation success
 
     while True:
         command = input("Enter command (UPLOAD, DOWNLOAD, DELETE, SUBFOLDER, LIST, QUIT): ").strip().upper()

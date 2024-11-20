@@ -1,6 +1,7 @@
 import socket
 import os
 import threading
+from cryptography.fernet import Fernet
 
 IP = socket.gethostbyname(socket.gethostname())
 PORT = 4455
@@ -9,9 +10,45 @@ SIZE = 1024
 FORMAT = "utf-8"
 FOLDER = "server_data"  # Folder to store files
 
+# Generate and save a key if it doesn't exist
+def load_create_key(file_path="server_key.key"):
+    if not os.path.exists(file_path):
+        key = Fernet.generate_key()
+        with open(file_path, "wb") as key_file:
+            key_file.write(key)
+    else:
+        with open(file_path, "rb") as key_file:
+            key = key_file.read()
+    return key
+
+# Load the encryption key
+key = load_create_key()
+cipher = Fernet(key)
+
+# Validate a password
+server_password = "passkey"  # Hardcoded server password
+stored_password = cipher.encrypt(server_password.encode())
+
+def validate_password(input_password):
+    try:
+        decrypted_password = cipher.decrypt(stored_password).decode()
+        return input_password == decrypted_password
+    except Exception:
+        return False
+
 #manages communication with the connected client
 def handle_client(conn, addr):
     print(f"[NEW CONNECTION] {addr} connected.")
+    #Validate the passcode
+    conn.send("PASSCODE: Enter the passcode: ".encode(FORMAT))
+    passcode = conn.recv(SIZE).decode(FORMAT)
+    if not validate_password(passcode):
+        conn.send("[ERROR] Invalid passcode. Connection closing.".encode(FORMAT))
+        conn.close()
+        return
+
+    conn.send("[SUCCESS] Passcode validated.".encode(FORMAT))
+
     #infinite loop to handle client requests until client disconnects
     while True:
         # Receive client request
@@ -55,7 +92,6 @@ def handle_client(conn, addr):
                 else:
                     print("[ERROR] File upload incomplete.")
                     conn.send("[ERROR] File upload failed.".encode(FORMAT))
-
 
         #sends requested file to client
         elif command == "DOWNLOAD":
@@ -122,11 +158,43 @@ def handle_client(conn, addr):
     conn.close()
     print(f"[DISCONNECTED] {addr} disconnected.")
 
+def load_password():
+    # Load encrypted password
+    password_file = "password.txt"
+
+    if os.path.exists(password_file):
+        with open(password_file, "rb") as file:
+            encrypted_password = file.read()
+        return encrypted_password
+    else:
+        print("[INFO] No password exists.")
+        return None
+
+def store_password(password):
+    #Encrypt and store the new pasword.
+    encrypted_password = cipher.encrypt(password.encode())
+    with open("password.txt", "wb") as file:
+        file.write(encrypted_password)
+        print("[INFO] Password has been stored and encrypted successfully.")
+        return encrypted_password
 
 def main():
     print("[STARTING] Server is starting.")
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(ADDR)
+
+    global stored_password
+    stored_password = load_password()
+    if not stored_password:
+        action = input("No password was found... Would you like to create a password? (yes/no): ").strip().lower()
+        if action == "yes":
+            new_password = input("Enter your new password: ").strip()
+            stored_password = store_password(new_password)
+        else:
+            print("[ERROR] Password is required.\n[SYSTEM] Exiting.")
+    else:
+        print("[INFO] Existing password loaded successfully.")
+
     #makes server_data if it doesnt exist
     if not os.path.exists(FOLDER):
         os.makedirs(FOLDER)
