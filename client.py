@@ -6,120 +6,156 @@ PORT = 4455
 ADDR = (IP, PORT)
 FORMAT = "utf-8"
 SIZE = 1024
-FOLDER = "data"  # Folder for client files
+FOLDER = "data"
 
-#Uploads a file
 def upload_file(client, filename):
-    file_path = os.path.join(FOLDER, filename) #constructs filepath
+    file_path = os.path.join(FOLDER, filename)
     if os.path.exists(file_path):
         file_size = os.path.getsize(file_path)
         file_ext = os.path.splitext(filename)[1].lower()
-        #warn user about file constraints
         if file_ext == ".txt" and file_size > 25 * 1024 * 1024:
-            print("[ERROR] Text files must be at least 25 MB.")
+            print("[ERROR] Text files must be at most 25MB.")
             return
         elif file_ext in [".mp3", ".wav"] and file_size > 1 * 1024 * 1024 * 1024:
-            print("[ERROR] Audio files must be at least 1 GB.")
+            print("[ERROR] Audio files must be at most 1GB.")
             return
         elif file_ext in [".mp4", ".mkv", ".avi"] and file_size > 2 * 1024 * 1024 * 1024:
-            print("[ERROR] Video files must be at least 2 GB.")
+            print("[ERROR] Video files must be at most 2GB.")
             return
 
-        #continue file upload
-        client.send(f"UPLOAD:{filename}:{file_size}".encode(FORMAT)) #sends upload request with file size and name
+        client.send(f"UPLOAD:{filename}:{file_size}".encode(FORMAT))
         with open(file_path, "rb") as file:
-            while chunk := file.read(SIZE): #sends file in chunks
+            while chunk := file.read(SIZE):
                 client.send(chunk)
         print(client.recv(SIZE).decode(FORMAT))
     else:
         print("[ERROR] File not found.")
 
-#Downloads a file
 def download_file(client, filename):
-    client.send(f"DOWNLOAD:{filename}".encode(FORMAT)) #sends download request with file name
+    client.send(f"DOWNLOAD:{filename}".encode(FORMAT))
     response = client.recv(SIZE).decode(FORMAT)
     if response.isdigit():
-        file_size = int(response) #number response from server is the file size
-        file_path = os.path.join(FOLDER, filename) #prepares file path
-        if filename.lower().endswith(".txt"): #writes txt files using UTF-8
+        file_size = int(response)
+        file_path = os.path.join(FOLDER, filename)
+        if filename.lower().endswith(".txt"):
             with open(file_path, "w") as file:
                 bytes_received = 0
                 while bytes_received < file_size:
                     chunk = client.recv(SIZE)
-                    file.write(chunk)  # writes the chunk of data into the file
+                    file.write(chunk)
                     bytes_received += len(chunk)
             print(f"[SUCCESS] {filename} downloaded.")
-        else: #used for everything else but txt files, uses binary
+        else:
             with open(file_path, "wb") as file:
                 bytes_received = 0
                 while bytes_received < file_size:
                     chunk = client.recv(SIZE)
-                    file.write(chunk) #writes the chunk of data into the file
+                    file.write(chunk)
                     bytes_received += len(chunk)
             print(f"[SUCCESS] {filename} downloaded.")
     else:
         print(response)
 
-#lists files in server
 def list_files(client):
-    client.send("LIST".encode(FORMAT)) #sends list command to server
+    client.send("LIST".encode(FORMAT))
     files = client.recv(SIZE).decode(FORMAT)
     print("[FILES ON SERVER]:")
     print(files)
 
 def delete_file(client, filename):
-    client.send(f"DELETE:{filename}".encode(FORMAT))#send delete request
+    client.send(f"DELETE:{filename}".encode(FORMAT))
     response = client.recv(SIZE).decode(FORMAT)
     print(response)
 
-#Creates/Deletes a subfolder on the server.
 def subfolder(client):
     action = input("Enter command (CREATE OR DELETE): ").strip().upper()
-    if action not in["CREATE", "DELETE"]:
+    if action not in ["CREATE", "DELETE"]:
         print("[ERROR] Invalid Action, Either CREATE or DELETE")
         return
     subfolder_name = input("Enter subfolder name: ").strip()
-    client.send(f"SUBFOLDER:{action}:{subfolder_name}".encode(FORMAT))  # send subfolder creation request
+    client.send(f"SUBFOLDER:{action}:{subfolder_name}".encode(FORMAT))
     response = client.recv(SIZE).decode(FORMAT)
     print(response)
 
 def main():
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #creates a socket
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(ADDR)
 
-    # Passcode validation
-    print(client.recv(SIZE).decode(FORMAT))  # Receive passcode prompt
-    passcode = input("Enter the passcode: ").strip()
-    client.send(passcode.encode(FORMAT))
-    response = client.recv(SIZE).decode(FORMAT)
-    if "[ERROR]" in response:
-        print(response)
+    if not os.path.exists(FOLDER):
+        os.makedirs(FOLDER)
+
+    try:
+        # Receive server prompt for username
+        server_response = client.recv(SIZE).decode(FORMAT)
+        print(server_response)
+        username = input("Enter your username: ").strip()
+        client.send(username.encode(FORMAT))
+
+        # Process server response
+        response = client.recv(SIZE).decode(FORMAT)
+        print(f"[SERVER]: {response}")
+
+        # Handle server's response
+        if response.startswith("[INFO] LOGIN:"):
+            password = input("Enter your password: ").strip()
+            client.send(password.encode(FORMAT))
+            login_response = client.recv(SIZE).decode(FORMAT)
+
+            if login_response.startswith("[SUCCESS]"):
+                print(login_response)
+            else:
+                print(f"[ERROR] {login_response}")
+                return  # Stop execution if login fails
+
+        elif response.startswith("[ERROR] Username not found"):
+            choice = input("Do you want to create an account? (yes/no): ").strip().lower()
+            client.send(choice.encode(FORMAT))
+
+            # Handle account creation process
+            if choice == "yes":
+                new_password_prompt = client.recv(SIZE).decode(FORMAT)
+                print(new_password_prompt)  # Server asks for the new password
+                new_password = input("Enter a new password: ").strip()
+                client.send(new_password.encode(FORMAT))
+
+                # Receive account creation confirmation
+                account_creation_response = client.recv(SIZE).decode(FORMAT)
+                print(account_creation_response)
+                if account_creation_response.startswith("[SUCCESS]"):
+                    print("Please restart the program to log in with your new account.")
+                    return  # End execution after account creation
+                else:
+                    print(f"[ERROR] {account_creation_response}")
+                    return
+            else:
+                print("[INFO] Exiting...")
+                return
+
+        # Command loop
+        while True:
+            command = input("Enter command (UPLOAD, DOWNLOAD, DELETE, SUBFOLDER, LIST, QUIT): ").strip().upper()
+            if command == "UPLOAD":
+                filename = input("Enter filename to upload: ").strip()
+                upload_file(client, filename)
+            elif command == "DOWNLOAD":
+                filename = input("Enter filename to download: ").strip()
+                download_file(client, filename)
+            elif command == "LIST":
+                list_files(client)
+            elif command == "DELETE":
+                filename = input("Enter filename to delete: ").strip()
+                delete_file(client, filename)
+            elif command == "SUBFOLDER":
+                subfolder(client)
+            elif command == "QUIT":
+                client.send("QUIT".encode(FORMAT))
+                break
+            else:
+                print("[ERROR] Invalid command.")
+    except Exception as e:
+        print(f"[ERROR] {e}")
+    finally:
         client.close()
-        return
-    print(response)  # Passcode validation success
-
-    while True:
-        command = input("Enter command (UPLOAD, DOWNLOAD, DELETE, SUBFOLDER, LIST, QUIT): ").strip().upper()
-        if command == "UPLOAD":
-            filename = input("Enter filename to upload: ").strip()
-            upload_file(client, filename)
-        elif command == "DOWNLOAD":
-            filename = input("Enter filename to download: ").strip()
-            download_file(client, filename)
-        elif command == "LIST":
-            list_files(client)
-        elif command == "DELETE":
-            filename = input("Enter filename to delete: ").strip()
-            delete_file(client, filename)
-        elif command == "SUBFOLDER":
-            subfolder(client)
-        elif command == "QUIT": #terminates connection
-            client.send("QUIT".encode(FORMAT))
-            break
-        else:
-            print("[ERROR] Invalid command.")
-
-    client.close()
 
 if __name__ == "__main__":
     main()
