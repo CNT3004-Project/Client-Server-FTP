@@ -9,17 +9,20 @@ from globalvars import SIZE, FORMAT, PORT, SERVER_FOLDER, SERVER_STATS_FILE, MAX
 IP = socket.gethostbyname(socket.gethostname())
 ADDR = (IP, PORT)
 def write_server_stats(operation, filename, filesize, time_taken, rate):
-    with open(SERVER_STATS_FILE, "a") as stats_file:
-        stats_file.write(
-            f"{operation}: {filename}, Size: {filesize} bytes, Time: {time_taken:.2f}s, Rate: {rate:.2f} bytes/s\n")
+    try:
+        with open(SERVER_STATS_FILE, "a") as stats_file:
+            stats_file.write(
+                f"{operation}: {filename}, Size: {filesize} bytes, Time: {time_taken:.2f}s, Rate: {rate:.2f} bytes/s\n")
 
-    # Keep only the latest MAX_STATS records
-    with open(SERVER_STATS_FILE, "r") as stats_file:
-        lines = stats_file.readlines()
+        # Keep only the latest MAX_STATS records
+        with open(SERVER_STATS_FILE, "r") as stats_file:
+            lines = stats_file.readlines()
 
-    if len(lines) > MAX_STATS:
-        with open(SERVER_STATS_FILE, "w") as stats_file:
-            stats_file.writelines(lines[-MAX_STATS:])
+        if len(lines) > MAX_STATS:
+            with open(SERVER_STATS_FILE, "w") as stats_file:
+                stats_file.writelines(lines[-MAX_STATS:])
+    except Exception as e:
+        print(f"[ERROR] Failed to write server stats: {e}")
 
 def load_user_DB():
     if os.path.exists(USER_DB):
@@ -34,18 +37,24 @@ def load_user_DB():
 
 # Generate and save a key if it doesn't exist
 def load_create_key(file_path="server_key.key"):
-    if not os.path.exists(file_path):
-        key = Fernet.generate_key()
-        with open(file_path, "wb") as key_file:
-            key_file.write(key)
-    else:
-        with open(file_path, "rb") as key_file:
-            key = key_file.read()
-    return key
+    try:
+        if not os.path.exists(file_path):
+            key = Fernet.generate_key()
+            with open(file_path, "wb") as key_file:
+                key_file.write(key)
+        else:
+            with open(file_path, "rb") as key_file:
+                key = key_file.read()
+        return key
+    except Exception as e:
+        print(f"[ERROR] Failed to load/create encryption key: {e}")
+        return None
 
 
 # Load the encryption key
 key = load_create_key()
+if key is None:
+    exit(1)  # Exit if key generation/loading failed
 cipher = Fernet(key)
 
 # Validate username and password
@@ -106,9 +115,9 @@ stored_password = cipher.encrypt(server_password.encode())
 
 # Manages communication with the connected client
 def handle_client(conn, addr):
-    print(f"[NEW CONNECTION] {addr} connected.")
 
     try:
+        print(f"[NEW CONNECTION] {addr} connected.")
         # User login or signup
         conn.send("[INFO] LOGIN: Enter your username: ".encode(FORMAT))
         username = conn.recv(SIZE).decode(FORMAT).strip()
