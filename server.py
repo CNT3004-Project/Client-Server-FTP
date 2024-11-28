@@ -3,6 +3,7 @@ import os
 import threading
 from cryptography.fernet import Fernet
 import json
+import time
 
 IP = socket.gethostbyname(socket.gethostname())
 PORT = 4455
@@ -11,7 +12,22 @@ SIZE = 1024
 FORMAT = "utf-8"
 FOLDER = "server_data"  # Folder to store files
 USER_DB = "user_db.json"
+MAX_STATS = 20
+STATS_FILE = "server_statistics.txt"
 
+
+def write_server_stats(operation, filename, filesize, time_taken, rate):
+    with open(STATS_FILE, "a") as stats_file:
+        stats_file.write(
+            f"{operation}: {filename}, Size: {filesize} bytes, Time: {time_taken:.2f}s, Rate: {rate:.2f} bytes/s\n")
+
+    # Keep only the latest MAX_STATS records
+    with open(STATS_FILE, "r") as stats_file:
+        lines = stats_file.readlines()
+
+    if len(lines) > MAX_STATS:
+        with open(STATS_FILE, "w") as stats_file:
+            stats_file.writelines(lines[-MAX_STATS:])
 
 def load_user_DB():
     if os.path.exists(USER_DB):
@@ -157,7 +173,9 @@ def handle_client(conn, addr):
                 elif file_ext in [".mp4", ".mkv", ".avi"] and file_size > 2 * 1024 * 1024 * 1024:
                     conn.send("[ERROR] Video files must be at most 2GB.".encode(FORMAT))
                 else:
+                    start_time = time.time()  # Start tracking time
                     print(f"[INFO] Starting file upload: {filename} with size {file_size} bytes.")
+
                     with open(file_path, "wb") as file:
                         bytes_received = 0
                         while bytes_received < file_size:
@@ -167,10 +185,17 @@ def handle_client(conn, addr):
                                 break
                             file.write(chunk)
                             bytes_received += len(chunk)
-                            print(f"[INFO] Received {bytes_received}/{file_size} bytes.")
+
+                    end_time = time.time()  # End tracking time
+                    time_taken = end_time - start_time
+                    rate = file_size / time_taken if time_taken > 0 else 0
 
                     if bytes_received == file_size:
                         conn.send(f"[SUCCESS] {filename} uploaded.".encode(FORMAT))
+                        print(f"[INFO] {filename} uploaded in {time_taken:.2f}s at {rate:.2f} bytes/s.")
+
+                        # Save statistics to the server log file
+                        write_server_stats("UPLOAD", filename, file_size, time_taken, rate)
                     else:
                         conn.send("[ERROR] File upload failed.".encode(FORMAT))
 

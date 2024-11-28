@@ -1,5 +1,6 @@
 import socket
 import os
+import time
 
 IP = socket.gethostbyname(socket.gethostname())
 PORT = 4455
@@ -7,7 +8,22 @@ ADDR = (IP, PORT)
 FORMAT = "utf-8"
 SIZE = 1024
 FOLDER = "data"
+MAX_STATS = 20
+STATS_FILE = "client_statistics.txt"
 
+
+def write_client_stats(operation, filename, filesize, time_taken, rate):
+    with open(STATS_FILE, "a") as stats_file:
+        stats_file.write(
+            f"{operation}: {filename}, Size: {filesize} bytes, Time: {time_taken:.2f}s, Rate: {rate:.2f} bytes/s\n")
+
+    # Keep only the latest MAX_STATS records
+    with open(STATS_FILE, "r") as stats_file:
+        lines = stats_file.readlines()
+
+    if len(lines) > MAX_STATS:
+        with open(STATS_FILE, "w") as stats_file:
+            stats_file.writelines(lines[-MAX_STATS:])
 def upload_file(client, filename):
     file_path = os.path.join(FOLDER, filename)
     if os.path.exists(file_path):
@@ -24,35 +40,54 @@ def upload_file(client, filename):
             return
 
         client.send(f"UPLOAD:{filename}:{file_size}".encode(FORMAT))
+
+        start_time = time.time()
+
         with open(file_path, "rb") as file:
+            bytes_sent = 0
             while chunk := file.read(SIZE):
                 client.send(chunk)
+                bytes_sent += len(chunk)
+
+                # Calculate and print upload progress
+                upload_progress = (bytes_sent / file_size) * 100
+                print(f"Uploading: {upload_progress:.2f}%")
+
+        upload_time = time.time() - start_time  # Calculate upload time
+        print(f"File uploaded in {upload_time:.2f} seconds.")
+
         print(client.recv(SIZE).decode(FORMAT))
     else:
         print("[ERROR] File not found.")
 
+
 def download_file(client, filename):
     client.send(f"DOWNLOAD:{filename}".encode(FORMAT))
     response = client.recv(SIZE).decode(FORMAT)
+
     if response.isdigit():
         file_size = int(response)
         file_path = os.path.join(FOLDER, filename)
-        if filename.lower().endswith(".txt"):
-            with open(file_path, "w") as file:
-                bytes_received = 0
-                while bytes_received < file_size:
-                    chunk = client.recv(SIZE)
-                    file.write(chunk)
-                    bytes_received += len(chunk)
-            print(f"[SUCCESS] {filename} downloaded.")
-        else:
-            with open(file_path, "wb") as file:
-                bytes_received = 0
-                while bytes_received < file_size:
-                    chunk = client.recv(SIZE)
-                    file.write(chunk)
-                    bytes_received += len(chunk)
-            print(f"[SUCCESS] {filename} downloaded.")
+
+        start_time = time.time()  # Start tracking time
+
+        with open(file_path, "wb") as file:
+            bytes_received = 0
+            while bytes_received < file_size:
+                chunk = client.recv(SIZE)
+                file.write(chunk)
+                bytes_received += len(chunk)
+                progress = (bytes_received / file_size) * 100
+                print(f"\rDownloading: {progress:.2f}%", end="")
+
+        end_time = time.time()  # End tracking time
+        time_taken = end_time - start_time
+        rate = file_size / time_taken if time_taken > 0 else 0
+
+        print(f"\n[INFO] {filename} downloaded in {time_taken:.2f}s at {rate:.2f} bytes/s.")
+
+        # Save statistics to the client log file
+        write_client_stats("DOWNLOAD", filename, file_size, time_taken, rate)
     else:
         print(response)
 
