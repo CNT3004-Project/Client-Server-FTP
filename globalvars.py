@@ -1,4 +1,3 @@
-import socket
 # Global variable to track the maximum number of stats to keep
 MAX_STATS = 20
 
