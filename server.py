@@ -4,29 +4,21 @@ import threading
 from cryptography.fernet import Fernet
 import json
 import time
+from globalvars import SIZE, FORMAT, PORT, SERVER_FOLDER, SERVER_STATS_FILE, MAX_STATS, USER_DB
 
 IP = socket.gethostbyname(socket.gethostname())
-PORT = 4455
 ADDR = (IP, PORT)
-SIZE = 1024
-FORMAT = "utf-8"
-FOLDER = "server_data"  # Folder to store files
-USER_DB = "user_db.json"
-MAX_STATS = 20
-STATS_FILE = "server_statistics.txt"
-
-
 def write_server_stats(operation, filename, filesize, time_taken, rate):
-    with open(STATS_FILE, "a") as stats_file:
+    with open(SERVER_STATS_FILE, "a") as stats_file:
         stats_file.write(
             f"{operation}: {filename}, Size: {filesize} bytes, Time: {time_taken:.2f}s, Rate: {rate:.2f} bytes/s\n")
 
     # Keep only the latest MAX_STATS records
-    with open(STATS_FILE, "r") as stats_file:
+    with open(SERVER_STATS_FILE, "r") as stats_file:
         lines = stats_file.readlines()
 
     if len(lines) > MAX_STATS:
-        with open(STATS_FILE, "w") as stats_file:
+        with open(SERVER_STATS_FILE, "w") as stats_file:
             stats_file.writelines(lines[-MAX_STATS:])
 
 def load_user_DB():
@@ -163,7 +155,7 @@ def handle_client(conn, addr):
                 filename, file_size = args
                 file_size = int(file_size)
                 file_ext = os.path.splitext(filename)[1].lower()
-                file_path = os.path.join(FOLDER, filename)
+                file_path = os.path.join(SERVER_FOLDER, filename)
 
                 # Check file size constraints
                 if file_ext == ".txt" and file_size > 25 * 1024 * 1024:
@@ -205,16 +197,16 @@ def handle_client(conn, addr):
             # Handle other commands (LIST, DELETE, SUBFOLDER, etc.)
             elif command == "LIST":
                 response = []
-                for root, dirs, files in os.walk(FOLDER):
+                for root, dirs, files in os.walk(SERVER_FOLDER):
                     for subfolder in dirs:
-                        response.append(f"[DIR] {os.path.relpath(os.path.join(root, subfolder), FOLDER)}")
+                        response.append(f"[DIR] {os.path.relpath(os.path.join(root, subfolder), SERVER_FOLDER)}")
                     for file in files:
-                        response.append(f"[FILE] {os.path.relpath(os.path.join(root, file), FOLDER)}")
+                        response.append(f"[FILE] {os.path.relpath(os.path.join(root, file), SERVER_FOLDER)}")
                 conn.send("\n".join(response).encode(FORMAT))
 
             elif command == "DELETE":
                 filename = args[0]
-                file_path = os.path.join(FOLDER, filename)
+                file_path = os.path.join(SERVER_FOLDER, filename)
                 if os.path.exists(file_path):
                     os.remove(file_path)
                     conn.send(f"[SUCCESS] {filename} deleted.".encode(FORMAT))
@@ -223,7 +215,7 @@ def handle_client(conn, addr):
 
             elif command == "SUBFOLDER":
                 action, subfolder_name = args
-                subfolder_path = os.path.join(FOLDER, subfolder_name)
+                subfolder_path = os.path.join(SERVER_FOLDER, subfolder_name)
 
                 if action == "CREATE":
                     if not os.path.exists(subfolder_path):
@@ -263,9 +255,9 @@ def main():
         return
 
     # Ensure the server folder exists
-    if not os.path.exists(FOLDER):
-        os.makedirs(FOLDER)
-        print(f"[INFO] Created folder: {FOLDER}")
+    if not os.path.exists(SERVER_FOLDER):
+        os.makedirs(SERVER_FOLDER)
+        print(f"[INFO] Created folder: {SERVER_FOLDER}")
 
     try:
         server.listen()

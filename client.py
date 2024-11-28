@@ -1,31 +1,24 @@
 import socket
 import os
 import time
+from globalvars import MAX_STATS, FORMAT, SIZE, CLIENT_FOLDER, CLIENT_STATS_FILE, PORT
 
 IP = socket.gethostbyname(socket.gethostname())
-PORT = 4455
 ADDR = (IP, PORT)
-FORMAT = "utf-8"
-SIZE = 1024
-FOLDER = "data"
-MAX_STATS = 20
-STATS_FILE = "client_statistics.txt"
-
-
 def write_client_stats(operation, filename, filesize, time_taken, rate):
-    with open(STATS_FILE, "a") as stats_file:
+    with open(CLIENT_STATS_FILE, "a") as stats_file:
         stats_file.write(
             f"{operation}: {filename}, Size: {filesize} bytes, Time: {time_taken:.2f}s, Rate: {rate:.2f} bytes/s\n")
 
     # Keep only the latest MAX_STATS records
-    with open(STATS_FILE, "r") as stats_file:
+    with open(CLIENT_STATS_FILE, "r") as stats_file:
         lines = stats_file.readlines()
 
     if len(lines) > MAX_STATS:
-        with open(STATS_FILE, "w") as stats_file:
+        with open(CLIENT_STATS_FILE, "w") as stats_file:
             stats_file.writelines(lines[-MAX_STATS:])
 def upload_file(client, filename):
-    file_path = os.path.join(FOLDER, filename)
+    file_path = os.path.join(CLIENT_FOLDER, filename)
     if os.path.exists(file_path):
         file_size = os.path.getsize(file_path)
         file_ext = os.path.splitext(filename)[1].lower()
@@ -67,7 +60,7 @@ def download_file(client, filename):
 
     if response.isdigit():
         file_size = int(response)
-        file_path = os.path.join(FOLDER, filename)
+        file_path = os.path.join(CLIENT_FOLDER, filename)
 
         start_time = time.time()  # Start tracking time
 
@@ -116,8 +109,8 @@ def main():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(ADDR)
 
-    if not os.path.exists(FOLDER):
-        os.makedirs(FOLDER)
+    if not os.path.exists(CLIENT_FOLDER):
+        os.makedirs(CLIENT_FOLDER)
 
     try:
         # Receive server prompt for username
