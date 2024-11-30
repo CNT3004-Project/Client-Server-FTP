@@ -4,10 +4,23 @@ import threading
 from cryptography.fernet import Fernet
 import json
 import time
-from globalvars import SIZE, FORMAT, PORT, SERVER_FOLDER, SERVER_STATS_FILE, MAX_STATS, USER_DB
+from globalvars import SIZE, FORMAT, PORT, SERVER_FOLDER, SERVER_STATS_FILE, MAX_STATS, USER_DB, BROADCAST_PORT
 
 IP = socket.gethostbyname(socket.gethostname())
 ADDR = (IP, PORT)
+
+def broadcast_ip():
+    """Broadcast the server's IP address over the local network."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as broadcast_socket:
+        broadcast_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        while True:
+            try:
+                broadcast_socket.sendto(IP.encode(FORMAT), ('<broadcast>', BROADCAST_PORT))
+                time.sleep(5)  # Broadcast every 5 seconds
+            except Exception as e:
+                print(f"[ERROR] Broadcast failed: {e}")
+                break
+
 def write_server_stats(operation, filename, filesize, time_taken, rate):
     try:
         with open(SERVER_STATS_FILE, "a") as stats_file:
@@ -253,9 +266,7 @@ def handle_client(conn, addr):
 def main():
     print("[STARTING] Server is starting.")
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #server.bind(ADDR)
 
-    # Try to bind the server to the address and port
     try:
         server.bind(ADDR)
         print(f"[INFO] Server bound to {ADDR}")
@@ -263,34 +274,29 @@ def main():
         print(f"[ERROR] Failed to bind server: {e}")
         return
 
-    # Ensure the server folder exists
     if not os.path.exists(SERVER_FOLDER):
         os.makedirs(SERVER_FOLDER)
         print(f"[INFO] Created folder: {SERVER_FOLDER}")
 
+    # Start the broadcasting thread
+    broadcast_thread = threading.Thread(target=broadcast_ip, daemon=True)
+    broadcast_thread.start()
+
     try:
         server.listen()
         print(f"[LISTENING] Server is listening on {IP}:{PORT}")
-    except Exception as e:
-        print(f"[ERROR] Failed to listen on port {PORT}: {e}")
-        return
-
-    while True:
-        try:
+        while True:
             conn, addr = server.accept()
             print(f"[NEW CONNECTION] {addr} connected.")
             client_thread = threading.Thread(target=handle_client, args=(conn, addr))
             client_thread.start()
             print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
-        except KeyboardInterrupt:
-            print("\n[SHUTTING DOWN] Server is shutting down.")
-            server.close()  # Ensure server is closed when interrupted
-            break
-        except Exception as e:
-            print(f"[ERROR] {e}")
-            server.close()  # Close the server in case of an unexpected error
-            break
-
+    except KeyboardInterrupt:
+        print("\n[SHUTTING DOWN] Server is shutting down.")
+        server.close()
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        server.close()
 
 if __name__ == "__main__":
     main()

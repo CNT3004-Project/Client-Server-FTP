@@ -13,7 +13,7 @@ SERVER_STATS_FILE = "server_statistics.txt"
 
 # Port to use for server-client communication
 PORT = 4455
-
+BROADCAST_PORT = 5000
 #DB to store user information
 USER_DB = "user_db.json"
 

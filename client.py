@@ -1,10 +1,21 @@
 import socket
 import os
 import time
-from globalvars import MAX_STATS, FORMAT, SIZE, CLIENT_FOLDER, CLIENT_STATS_FILE, PORT
+from globalvars import MAX_STATS, FORMAT, SIZE, CLIENT_FOLDER, CLIENT_STATS_FILE, PORT, BROADCAST_PORT
 
 IP = socket.gethostbyname(socket.gethostname())
 ADDR = (IP, PORT)
+
+def discover_server_ip():
+    """Discover the server's IP address via UDP broadcast."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as listener_socket:
+        listener_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        listener_socket.bind(('', BROADCAST_PORT))
+        print("[DISCOVERY] Listening for server broadcast...")
+        server_ip, _ = listener_socket.recvfrom(SIZE)
+        return server_ip.decode(FORMAT)
+
+
 def write_client_stats(operation, filename, filesize, time_taken, rate):
     with open(CLIENT_STATS_FILE, "a") as stats_file:
         stats_file.write(
@@ -106,6 +117,11 @@ def subfolder(client):
     print(response)
 
 def main():
+    server_ip = discover_server_ip()
+    ADDR = (server_ip, PORT)
+
+    print(f"[DISCOVERY] Found server at {ADDR}")
+
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(ADDR)
 
@@ -123,7 +139,6 @@ def main():
         response = client.recv(SIZE).decode(FORMAT)
         print(f"[SERVER]: {response}")
 
-        # Handle server's response
         if response.startswith("[INFO] LOGIN:"):
             password = input("Enter your password: ").strip()
             client.send(password.encode(FORMAT))
@@ -133,25 +148,23 @@ def main():
                 print(login_response)
             else:
                 print(f"[ERROR] {login_response}")
-                return  # Stop execution if login fails
+                return
 
         elif response.startswith("[ERROR] Username not found"):
             choice = input("Do you want to create an account? (yes/no): ").strip().lower()
             client.send(choice.encode(FORMAT))
 
-            # Handle account creation process
             if choice == "yes":
                 new_password_prompt = client.recv(SIZE).decode(FORMAT)
-                print(new_password_prompt)  # Server asks for the new password
+                print(new_password_prompt)
                 new_password = input("Enter a new password: ").strip()
                 client.send(new_password.encode(FORMAT))
 
-                # Receive account creation confirmation
                 account_creation_response = client.recv(SIZE).decode(FORMAT)
                 print(account_creation_response)
                 if account_creation_response.startswith("[SUCCESS]"):
                     print("Please restart the program to log in with your new account.")
-                    return  # End execution after account creation
+                    return
                 else:
                     print(f"[ERROR] {account_creation_response}")
                     return
@@ -159,7 +172,6 @@ def main():
                 print("[INFO] Exiting...")
                 return
 
-        # Command loop
         while True:
             command = input("Enter command (UPLOAD, DOWNLOAD, DELETE, SUBFOLDER, LIST, QUIT): ").strip().upper()
             if command == "UPLOAD":
