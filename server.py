@@ -212,6 +212,25 @@ def handle_client(conn, addr):
                         write_server_stats("UPLOAD", filename, file_size, time_taken, rate)
                     else:
                         conn.send("[ERROR] File upload failed.".encode(FORMAT))
+            if command == "DOWNLOAD":
+                filename = args[0]
+                file_path = os.path.join(SERVER_FOLDER, filename)
+
+                if os.path.exists(file_path):
+                    file_size = os.path.getsize(file_path)
+                    conn.send(str(file_size).encode(FORMAT))  # Send file size to client
+
+                    print(f"[INFO] Sending file '{filename}' ({file_size} bytes) to {addr}")
+                    with open(file_path, "rb") as file:
+                        while chunk := file.read(SIZE):
+                            conn.send(chunk)
+                    print(f"[INFO] File '{filename}' sent successfully.")
+                else:
+                    conn.send("[ERROR] File not found.".encode(FORMAT))
+
+            elif command == "QUIT":
+                print(f"[DISCONNECTED] {addr} disconnected.")
+                break
 
             elif command == "QUIT":
                 break
